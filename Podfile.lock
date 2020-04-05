@@ -1,0 +1,18 @@
+PODS:
+  - Layers (1.0.0.LOCAL)
+  - Layers/Tests (1.0.0.LOCAL)
+
+DEPENDENCIES:
+  - Layers (from `Layers.podspec`)
+  - Layers/Tests (from `Layers.podspec`)
+
+EXTERNAL SOURCES:
+  Layers:
+    :path: Layers.podspec
+
+SPEC CHECKSUMS:
+  Layers: d2eaf6265064468e6d9684551723e8a973b46d9c
+
+PODFILE CHECKSUM: 4f894027e874ee5f1374e2b31cbcfb26396e9bc8
+
+COCOAPODS: 1.8.4
