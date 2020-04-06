@@ -8,60 +8,20 @@
 import UIKit
 
 
+protocol LayerRootViewController : LayerViewController {
+    var layers : LayerRootPresenter { get }
+}
+
+final class LayerRootPresenter {
+    
+}
+
 protocol LayerViewController : UIViewController {
     var layers : LayerPresenter { get }
 }
 
-protocol LayersRootViewController : UIViewController {
-    
-    var layers : LayersRootPresenter { get }
-}
-
-final class LayersRootPresenter {
-    
-    weak var host : LayersRootViewController? = nil {
-        didSet {
-            self.presenter.root = self.host
-        }
-    }
-    
-    var presenter : LayerPresenter = LayerPresenter()
-    
-    private(set) var needsUpdate : Bool = false
-    
-    func setNeedsLayersUpdate() {
-        self.needsUpdate = true
-    }
-    
-    func updateIfNeeded() {
-        guard self.needsUpdate else {
-            return
-        }
-    }
-}
-
 final class LayerPresenter {
-    
-    weak var root : LayersRootViewController? = nil {
-        didSet {
-            guard self.root !== oldValue else {
-                return
-            }
             
-            for child in self.children {
-                if let child = child as? LayerViewController {
-                    child.layers.root = self.root
-                }
-            }
-            
-            if let root = self.root {
-                root.layers.setNeedsLayersUpdate()
-            }
-        }
-    }
-    
-    weak var viewController : UIViewController? = nil
-    
     var children : [UIViewController] {
         get { _children }
         set { self.set(children: newValue, animated: false) }
@@ -99,16 +59,21 @@ final class LayerPresenter {
         }
         
         _children = children
-        
-        if let root = self.root {
-            root.layers.setNeedsLayersUpdate()
-        }
     }
     
     private var _children : [UIViewController] = []
 }
 
 extension UIViewController {
+        
+    fileprivate func recurseAll(using block : (UIViewController) -> ()) {
+        block(self)
+        
+        for child in self.children {
+            child.recurseAll(using: block)
+        }
+    }
+    
     func toFlattenedLayers() -> [UIViewController] {
         
         var viewControllers = [UIViewController]()
@@ -127,16 +92,8 @@ extension UIViewController {
     private func flattenedChildren(into viewControllers : inout [UIViewController])
     {
         if let self = self as? LayerViewController {
-            self.children.forEach { $0.flattenedSelf(into: &viewControllers) }
-            self.children.forEach { $0.flattenedChildren(into: &viewControllers) }
-        }
-    }
-    
-    fileprivate func recurseAll(using block : (UIViewController) -> ()) {
-        block(self)
-        
-        for child in self.children {
-            child.recurseAll(using: block)
+            self.layers.children.forEach { $0.flattenedSelf(into: &viewControllers) }
+            self.layers.children.forEach { $0.flattenedChildren(into: &viewControllers) }
         }
     }
 }
@@ -195,9 +152,6 @@ struct PresentationStyle {
             // TODO
         }
     }
-    
-    /// Used to occlude any views behind the view controller, for performance in deep hierarchies.
-    var isFullScreen : Bool = false
     
     enum Positioning {
         case relativeToWindow

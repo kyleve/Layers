@@ -26,7 +26,7 @@ final class Tests : XCTestCase {
             ChildViewController(),
         ])
         
-        root.layers.presenter.children = [child]
+        root.layers.children = [child]
         
         print(root.toFlattenedLayers())
     }
@@ -80,11 +80,12 @@ final class Tests : XCTestCase {
 }
 
 fileprivate final class RootViewController : UIViewController, LayersRootViewController {
-    var layers: LayersRootPresenter = LayersRootPresenter()
-    
-    init() {
+    var layers: LayerPresenter = LayerPresenter()
+
+    init(children : [UIViewController] = []) {
+        self.layers.children = children
+        
         super.init(nibName: nil, bundle: nil)
-        self.layers.host = self
     }
     
     required init?(coder: NSCoder) { fatalError() }
@@ -97,8 +98,6 @@ fileprivate final class ChildViewController : UIViewController, LayerViewControl
         self.layers.children = children
         
         super.init(nibName: nil, bundle: nil)
-        
-        self.layers.viewController = self
     }
     
     required init?(coder: NSCoder) { fatalError() }
