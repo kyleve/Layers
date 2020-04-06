@@ -11,32 +11,65 @@ import XCTest
 
 final class Tests : XCTestCase {
     
+    func test_viewControllers()
+    {
+        let root = RootViewController()
+        
+        let child = ChildViewController(children: [
+            ChildViewController(children: [
+                ChildViewController(),
+                ChildViewController(),
+            ]),
+            ChildViewController(children: [
+                ChildViewController(),
+            ]),
+            ChildViewController(),
+        ])
+        
+        root.layers.presenter.children = [child]
+        
+        print(root.toFlattenedLayers())
+    }
+    
     func test_tree() {
         let tree = ViewControllerTree(
-            root: .init(provider: {
+            root: .init(
+                provider: {
+                    .init(presentationStyle: .init(positioning: .relativeToWindow), viewController: VC_A())
+            }, children: [
                 .init(
-                    presentationStyle: .init(positioning: .relativeToWindow),
-                    viewController: VC_A()
+                    provider: {
+                        .init(presentationStyle: .init(positioning: .relativeToWindow), viewController: VC_B())
+                }, children: [
+                    .init(
+                        provider: {
+                            .init(presentationStyle: .init(positioning: .relativeToWindow), viewController: VC_C())
+                    }, children: []
+                    ),
+                    .init(
+                        provider: {
+                            .init(presentationStyle: .init(positioning: .relativeToWindow), viewController: VC_C())
+                    }, children: []
+                    )
+                    ]
+                ),
+                .init(
+                    provider: {
+                        .init(presentationStyle: .init(positioning: .relativeToWindow), viewController: VC_B())
+                }, children: [
+                    .init(
+                        provider: {
+                            .init(presentationStyle: .init(positioning: .relativeToWindow), viewController: VC_D())
+                    }, children: []
+                    ),
+                    .init(
+                        provider: {
+                            .init(presentationStyle: .init(positioning: .relativeToWindow), viewController: VC_D())
+                    }, children: []
+                    )
+                    ]
                 )
-            }, child: .child(.init(
-                provider: {
-                    .init(
-                        presentationStyle: .init(positioning: .relativeToWindow),
-                        viewController: VC_B()
-                    )
-            }, child: .child(.init(
-                provider: {
-                    .init(
-                        presentationStyle: .init(positioning: .relativeToWindow),
-                        viewController: VC_C()
-                    )
-            }, child: .child(.init(
-                provider: {
-                    .init(
-                        presentationStyle: .init(positioning: .relativeToWindow),
-                        viewController: VC_D()
-                    )
-            }, child: .none))))))
+                ]
             )
         )
         
@@ -44,6 +77,31 @@ final class Tests : XCTestCase {
         
         print(identified)
     }
+}
+
+fileprivate final class RootViewController : UIViewController, LayersRootViewController {
+    var layers: LayersRootPresenter = LayersRootPresenter()
+    
+    init() {
+        super.init(nibName: nil, bundle: nil)
+        self.layers.host = self
+    }
+    
+    required init?(coder: NSCoder) { fatalError() }
+}
+
+fileprivate final class ChildViewController : UIViewController, LayerViewController {
+    var layers: LayerPresenter = LayerPresenter()
+
+    init(children : [UIViewController] = []) {
+        self.layers.children = children
+        
+        super.init(nibName: nil, bundle: nil)
+        
+        self.layers.viewController = self
+    }
+    
+    required init?(coder: NSCoder) { fatalError() }
 }
 
 

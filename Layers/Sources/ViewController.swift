@@ -8,6 +8,147 @@
 import UIKit
 
 
+protocol LayerViewController : UIViewController {
+    var layers : LayerPresenter { get }
+}
+
+protocol LayersRootViewController : UIViewController {
+    
+    var layers : LayersRootPresenter { get }
+}
+
+final class LayersRootPresenter {
+    
+    weak var host : LayersRootViewController? = nil {
+        didSet {
+            self.presenter.root = self.host
+        }
+    }
+    
+    var presenter : LayerPresenter = LayerPresenter()
+    
+    private(set) var needsUpdate : Bool = false
+    
+    func setNeedsLayersUpdate() {
+        self.needsUpdate = true
+    }
+    
+    func updateIfNeeded() {
+        guard self.needsUpdate else {
+            return
+        }
+    }
+}
+
+final class LayerPresenter {
+    
+    weak var root : LayersRootViewController? = nil {
+        didSet {
+            guard self.root !== oldValue else {
+                return
+            }
+            
+            for child in self.children {
+                if let child = child as? LayerViewController {
+                    child.layers.root = self.root
+                }
+            }
+            
+            if let root = self.root {
+                root.layers.setNeedsLayersUpdate()
+            }
+        }
+    }
+    
+    weak var viewController : UIViewController? = nil
+    
+    var children : [UIViewController] {
+        get { _children }
+        set { self.set(children: newValue, animated: false) }
+    }
+    
+    func present(_ viewController : UIViewController, animated : Bool = false, completion : () -> () = {})
+    {
+        self.set(
+            children: self.children + [viewController],
+            animated: animated,
+            completion: completion
+        )
+    }
+    
+    func dismiss(_ viewController : UIViewController, animated : Bool = false, completion : () -> () = {})
+    {
+        var new = self.children
+        
+        if let index = self.children.firstIndex(of: viewController) {
+            new.remove(at: index)
+        }
+        
+        self.set(
+            children: new,
+            animated: animated,
+            completion: completion
+        )
+    }
+    
+    func set(children : [UIViewController], animated : Bool = false, completion : () -> () = {})
+    {
+        guard self.children != children else {
+            completion()
+            return
+        }
+        
+        _children = children
+        
+        if let root = self.root {
+            root.layers.setNeedsLayersUpdate()
+        }
+    }
+    
+    private var _children : [UIViewController] = []
+}
+
+extension UIViewController {
+    func toFlattenedLayers() -> [UIViewController] {
+        
+        var viewControllers = [UIViewController]()
+        
+        self.flattenedSelf(into: &viewControllers)
+        self.flattenedChildren(into: &viewControllers)
+        
+        return viewControllers
+    }
+    
+    private func flattenedSelf(into viewControllers : inout [UIViewController])
+    {
+        viewControllers.append(self)
+    }
+    
+    private func flattenedChildren(into viewControllers : inout [UIViewController])
+    {
+        if let self = self as? LayerViewController {
+            self.children.forEach { $0.flattenedSelf(into: &viewControllers) }
+            self.children.forEach { $0.flattenedChildren(into: &viewControllers) }
+        }
+    }
+    
+    fileprivate func recurseAll(using block : (UIViewController) -> ()) {
+        block(self)
+        
+        for child in self.children {
+            child.recurseAll(using: block)
+        }
+    }
+}
+
+
+
+
+
+
+
+
+
 final class ViewControllerContainer<ViewControllerType : UIViewController> : AnyViewControllerContainer {
     
     var presentationStyle : PresentationStyle
@@ -87,16 +228,16 @@ struct ViewControllerTree {
     struct Node {
         var provider : () -> AnyViewControllerContainer
         var viewControllerType : UIViewController.Type
-        var child : Child
+        var children : [Node]
         
         init<ViewControllerType:UIViewController>(
             provider : @escaping () -> ViewControllerContainer<ViewControllerType>,
-            child : Child
+            children : [Node]
         ) {
             self.viewControllerType = ViewControllerType.self
             
             self.provider = provider
-            self.child = child
+            self.children = children
         }
         
         func toIdentified(with depth : Int = 0) -> IdentifiedViewControllerTree.Node {
@@ -107,20 +248,8 @@ struct ViewControllerTree {
                     viewControllerType: self.viewControllerType,
                     depth: depth
                 ),
-                child: self.child.node.flatMap { .child($0.toIdentified(with: depth + 1)) } ?? .none
+                children: self.children.map { $0.toIdentified(with: depth + 1) }
             )
-        }
-    }
-    
-    indirect enum Child {
-        case none
-        case child(Node)
-        
-        var node : Node? {
-            switch self {
-            case .none: return nil
-            case .child(let node): return node
-            }
         }
     }
 }
@@ -133,26 +262,34 @@ struct IdentifiedViewControllerTree {
         var provider : () -> AnyViewControllerContainer
         var viewControllerType : UIViewController.Type
         var identifier : Identifier
-        var child : Child
+        var children : [Node]
         
         func flattened() -> [FlatNode] {
             var flattened = [FlatNode]()
             
-            self.flatten(into: &flattened)
+            self.flattenSelf(into: &flattened)
+            self.flattenChildren(into: &flattened)
             
             return flattened
         }
         
-        private func flatten(into flattened : inout [FlatNode]) {
+        private func flattenSelf(into flattened : inout [FlatNode]) {
             
             flattened.append(FlatNode(
                 provider: self.provider,
                 viewControllerType: self.viewControllerType,
                 identifier: self.identifier
             ))
+        }
+        
+        private func flattenChildren(into flattened : inout [FlatNode]) {
             
-            if let child = self.child.node {
-                child.flatten(into: &flattened)
+            for child in self.children {
+                child.flattenSelf(into: &flattened)
+            }
+            
+            for child in self.children {
+                child.flattenChildren(into: &flattened)
             }
         }
     }
@@ -161,18 +298,6 @@ struct IdentifiedViewControllerTree {
         var provider : () -> AnyViewControllerContainer
         var viewControllerType : UIViewController.Type
         var identifier : Identifier
-    }
-    
-    indirect enum Child {
-        case none
-        case child(Node)
-        
-        var node : Node? {
-            switch self {
-            case .none: return nil
-            case .child(let node): return node
-            }
-        }
     }
     
     struct Identifier {
